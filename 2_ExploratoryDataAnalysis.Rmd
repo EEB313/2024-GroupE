@@ -1,0 +1,147 @@
+---
+title: "exploratory_data analysis_project"
+author: "Kasturi Bhatt"
+date: "2024-11-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Testing different plots
+
+Load packages
+```{r}
+library(dplyr)
+library(tidyverse)
+```
+
+read data
+```{r}
+ffg_data <- read_csv("final_mean_proportion_by_ffg_and_site.csv")
+
+ffg_data<- ffg_data%>%
+  subset(ffg!="UN")%>%
+  subset(ffg!="PI")
+```
+
+#data wrangling
+
+##separating different rivers
+```{r}
+CLS_river <- ffg_data%>%
+  subset(river=="CLS")
+
+ELS_river <- ffg_data%>% 
+  subset(river=="ELS")
+
+RCLS_river <- ffg_data%>%
+  subset(river=="RCLS")
+```
+
+
+#Exploratory plots
+
+##River gradient vs count plots by ffg
+
+###CLS river
+```{r}
+CLS_river%>% 
+  group_by(ffg)%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=ffg))+
+  geom_line()
+```
+
+###ELS river
+```{r}
+ELS_river%>% 
+  group_by(ffg)%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=ffg))+
+  geom_line()
+```
+
+###CLS river
+```{r}
+RCLS_river%>% 
+  group_by(ffg)%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=ffg))+
+  geom_line()
+```
+
+
+
+##Comparing Rivers
+
+```{r}
+ffg_data%>%
+  group_by(ffg)%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=ffg))+
+  geom_line()+
+  facet_wrap(~river, scales = "free_x")
+ 
+```
+
+##Without CG CF
+
+```{r}
+ffg_data%>%
+  group_by(ffg)%>%
+  filter(ffg!="CF")%>%
+  filter(ffg!="CG")%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=ffg))+
+  geom_line()+
+  facet_wrap(~river, scales = "free")
+```
+
+
+quick look at count data
+
+```{r}
+count_data<- read_csv("ffg_long_counts.csv")
+```
+
+```{r}
+count_data%>%
+  subset(ffg!="UN")%>%
+  subset(river=="CLS")%>%
+  group_by(ffg)%>%
+  summarise(total_count=sum(count))
+```
+
+
+##Plots with combined feeding groups
+
+```{r}
+new_ffg_prop<- read_csv("new_ffg_prop.csv")
+```
+
+```{r}
+new_ffg_prop%>%
+  group_by(new_ffg)%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=new_ffg))+
+  geom_line()+
+  facet_wrap(~river, scales = "free_x")
+
+#see that #of collectors highest at end, which makes sense acc to diagram
+#also makes sense that collectors stays high in proportion than all others
+```
+
+remove C to look at rest
+
+```{r}
+new_ffg_prop%>%
+  group_by(new_ffg)%>%
+  subset(new_ffg!="C")%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=new_ffg))+
+  geom_line()+
+  facet_wrap(~river, scales = "free_x")
+```
+
+effect of site?? especially in CLS looks like certain sites just have more of all ffg
+also see that SH high at beginnig which makes sense!! (clear in ELS)
+predators everywhere, makes sense. inc where other things increase.
+scrapers should generally inc. around middle, which we kind of see in CLS & ELS
+
+
+
