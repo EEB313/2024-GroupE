@@ -1,0 +1,112 @@
+---
+title: "3_PoissonStatAnalysis"
+output: html_document
+date: "2024-12-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyverse)
+```
+
+## Likelihood Evaluator under a Poisson Distribution
+
+```{r}
+#read in data 
+beginning_end <- read.csv("beginning_end.csv")
+```
+
+```{r}
+#log likelihood evaluator
+
+LL_eval <- function(data, lambda){
+  sum(dpois(round(data$count), lambda = lambda, log = T))
+}
+
+LL_eval_for_specific_combo <- function(group, location_to_use){
+  
+    beginning_end |> subset(distinct_ffg == paste(group) & location == paste(location_to_use)) |>
+    mutate(count = round(total_count)) -> obs
+  
+  lambda_list <- seq(0,15e3, by = 1)
+  i <- 1
+  LLs <- NULL
+  
+  for (lambda in lambda_list){
+    LLs[i] <- LL_eval(obs, lambda)
+    i <- i+1
+  }
+  
+  return(cbind(data.frame(LL = LLs, lambda = lambda_list), 
+               group = group, 
+               location = location_to_use)
+         )
+}
+
+LL_eval_for_specific_combo(group = "CG", location_to_use = "beginning")
+LL_eval_for_specific_combo(group = "CG", location_to_use = "end")
+
+expand.grid(group = unique(beginning_end$distinct_ffg),
+            location_to_use = unique(beginning_end$location)
+            ) -> Combos
+
+AllLogLiks <- NULL
+
+for (j in 1:nrow(Combos)){
+  AllLogLiks[[j]] <-
+    LL_eval_for_specific_combo(group = as.character(Combos[j,1]), 
+                               location_to_use = as.character(Combos[j,2])
+                               )
+}
+
+do.call(rbind, AllLogLiks) -> AllLogLiks
+
+AllLogLiks |> ggplot(aes(x = lambda, y = LL, 
+                         color = group)) + geom_line() + 
+  facet_grid(group~location, scale = "free")
+
+AllLogLiks |> group_by(group, location) |>
+  mutate(MLE = case_when(LL == max(LL) ~ lambda,
+                         LL != max(LL) ~ NA)) |>
+  drop_na() |>
+  select(MLE, group, location)
+
+CIs <- NULL
+
+for (i in 1:nrow(Combos)){
+  
+  AllLogLiks |> subset(group == Combos$group[i] & location == Combos$location_to_use[i]) |>
+  subset(LL == max(LL)) -> MLE
+  
+  AllLogLiks |> subset(group == Combos$group[i] & location == Combos$location_to_use[i]) |>
+  subset(abs(LL - max(LL)) < 1.92) |>
+  summarise(upper = max(lambda), lower = min(lambda)) -> CI
+  
+  rbind(CIs, data.frame(
+    MLE = MLE$lambda, lower = CI$lower, upper = CI$upper, 
+    group = Combos$group[i], 
+    location = Combos$location_to_use[i])
+        ) -> CIs
+}
+
+CIs
+```
+
+```{r}
+#plot confidence intervals
+
+Confidence_Intervals <- CIs |> 
+  group_by(location,group) |>
+  ggplot(aes(x = as.factor(location), y = MLE, color = group, group = group)) + 
+  geom_point(size = 3) +
+  geom_line() + 
+  geom_errorbar(aes(ymin = lower, ymax = upper)) +
+  labs(title = "Confidence Intervals for Abundance", 
+       subtitle = "By Location and Functional Feeding Group",
+       x = "location", 
+       y = "abundance (lambda)", 
+      colour = "Functional \nFeeding Group") +
+  scale_colour_manual(values = c("CG" = "#f58c84", "CF" = "#dcc790", "PR" = "#65cceb", "SC" = "#c1b1f5", "SH" = "#f3a1df")) +
+  facet_wrap(~group, scales = "free_y")
+```

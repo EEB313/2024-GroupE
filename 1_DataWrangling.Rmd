@@ -1,0 +1,121 @@
+---
+title: "1_DataWrangling"
+output: html_document
+date: "2024-12-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(dplyr)
+require(tidyverse)
+```
+
+## Initial Data Wrangling (assigning FFGs, selecting rivers, tidying)
+
+```{r}
+#read in data sets (abundances and FFG groupings)
+
+species <- read.csv("good.one.csv")
+feeding_group <- read.csv("BioNet-InvertebrateList.csv") %>%
+  select(finalID, ffg) %>%
+  rename(Family = finalID)
+```
+
+```{r}
+#join by family, and simplify
+
+joined <- full_join(species, feeding_group, 
+                        by = join_by("Family")) %>%
+  filter(!is.na(Group)) %>%
+  filter(!is.na(ffg)) %>%
+  select(-c(128:140))
+
+sites_n_ffg <- joined %>% select(-c(1, 2))
+
+simplified <- sites_n_ffg %>%
+  group_by(ffg) %>%
+  summarize_at(vars(c(1:125)), 
+               list(sum = sum))
+```
+
+```{r}
+#selecting only linear rivers
+
+systems_we_want <- simplified %>%
+  select(c(1, 26:57, 91:126))
+
+
+# write.csv(systems_we_want, "ffg_by_trials.csv", row.names = FALSE)
+```
+
+```{r}
+#read in re-formatted data set 
+
+ffg_site_trial_group <- read.csv("ffg_long_counts.csv")
+
+mean_count_by_ffg_and_site <- ffg_site_trial_group %>%
+  group_by(river, site, ffg) %>%
+  summarize(mean_count = mean(count))
+```
+
+## Mean Proportions by FFG and Site
+
+```{r}
+proportion_by_ffg_trial_and_site <- ffg_site_trial_group %>%
+  group_by(river, site, trial) %>%
+  mutate(total= sum(count)) %>%
+  group_by(river, site, trial, ffg) %>%
+  mutate(proportion = count/total)
+
+mean_proportion_by_ffg_and_site <- proportion_by_ffg_trial_and_site %>%
+  group_by(river, site, ffg) %>%
+  summarize(mean_proportion = mean(proportion)) 
+
+write.csv(mean_proportion_by_ffg_and_site, "final_mean_proportion_by_ffg_and_site.csv", row.names = FALSE)
+```
+
+## Binning into the Beginning and End of the River
+
+```{r}
+#reading in new csv
+count_data <- read.csv("ffg_long_counts_new.csv")
+```
+
+```{r}
+#binning based on location in river, and grouping into the five distinct FFGs
+
+unique(count_data[count_data$river == unique(count_data$river)[1], "site"])
+unique(count_data[count_data$river == unique(count_data$river)[2], "site"])
+unique(count_data[count_data$river == unique(count_data$river)[3], "site"])
+
+beginning_end <- count_data |>
+  mutate(location = case_when(
+    river == unique(count_data$river)[1] & site < 4 ~ "beginning", 
+    river == unique(count_data$river)[1] & site >= 4 ~ "end", 
+    river == unique(count_data$river)[2] & site < 3 ~ "beginning", 
+    river == unique(count_data$river)[2] & site >= 3 ~ "end", 
+    river == unique(count_data$river)[3] & site < 5 ~ "beginning", 
+    river == unique(count_data$river)[3] & site >= 5 ~ "end", 
+  )
+         ) %>%
+  subset(ffg != "UN") %>%
+  subset(ffg != "PI") %>%
+  group_by(river, location, trial) %>%
+  mutate(
+    CG_count = sum(count[ffg %in% c("CG", "CG/PR", "CG/SC")]),
+    CF_count = sum(count[ffg %in% c("CF")]),
+    SC_count = sum(count[ffg %in% c("SC", "CG/SC")]),
+    SH_count = sum(count[ffg == "SH"]),
+    PR_count = sum(count[ffg %in% c("PR", "CG/PR")])) %>%
+  ungroup() %>%
+  select(river, location, CG_count, CF_count, SC_count, SH_count, PR_count) %>%
+  pivot_longer(
+    cols = ends_with("_count"),
+    names_to = "distinct_ffg",
+    values_to = "total_count") %>%
+  mutate(distinct_ffg = sub("_count$", "", distinct_ffg))%>%
+  distinct()
+
+write.csv(beginning_end, "beginning_end.csv", row.names = FALSE)
+```
+

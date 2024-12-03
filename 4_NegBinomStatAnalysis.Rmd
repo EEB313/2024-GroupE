@@ -1,0 +1,187 @@
+---
+title: "4_NegBinomStatAnalysis"
+output: html_document
+date: "2024-12-03"
+---
+
+```{r}
+require(tidyverse)
+require(dplyr)
+```
+
+#Likelihood Evaluator under a Negative Binomial Distribution
+
+```{r}
+#read in data 
+beginning_end <- read.csv("beginning_end.csv")
+```
+
+
+```{r}
+#log likelihood evaluator
+LL_eval <- function(data, size, mu){
+  sum(dnbinom(round(data$count), size = size, mu = mu, log = T))
+}
+
+size_list <- seq(0.1,10, by = 0.01)
+mu_list <- seq(0,5e3, by = 10)
+size_mu_combos <- expand.grid(mu = mu_list, 
+                                size = size_list)
+
+LL_eval_for_specific_combo <- function(group, location_to_use){
+  
+    beginning_end |> subset(distinct_ffg == paste(group) & location == paste(location_to_use)) |>
+    mutate(count = round(total_count)) -> obs
+  
+  i <- 1
+  LLs <- NULL
+  
+  for (i in 1:nrow(size_mu_combos)){
+    LLs[i] <- LL_eval(obs, size = size_mu_combos$size[i], mu = size_mu_combos$mu[i])
+    i <- i+1
+  }
+  
+  return(cbind(data.frame(LL = LLs, mu = size_mu_combos$mu, size = size_mu_combos$size), 
+               group = group, 
+               location = location_to_use)
+         )
+}
+
+LL_eval_for_specific_combo(group = "CG", location_to_use = "beginning")
+LL_eval_for_specific_combo(group = "CG", location_to_use = "end")
+
+expand.grid(group = unique(beginning_end$distinct_ffg),
+            location_to_use = unique(beginning_end$location)
+            ) -> Combos
+
+AllLogLiks <- NULL
+
+for (j in 1:nrow(Combos)){
+  AllLogLiks[[j]] <-
+    LL_eval_for_specific_combo(group = as.character(Combos[j,1]), 
+                               location_to_use = as.character(Combos[j,2])
+                               )
+}
+
+do.call(rbind, AllLogLiks) -> AllLogLiks
+
+# for size 
+
+CIs_size <- NULL
+
+for (i in 1:nrow(Combos)){
+  
+  AllLogLiks |> 
+    subset(group == Combos$group[i] & location == Combos$location_to_use[i]) |>
+    subset(LL == max(LL)) -> MLE_size
+  
+  AllLogLiks |> subset(group == Combos$group[i] & location == Combos$location_to_use[i]) |>
+    subset(mu == MLE_size$mu) |>
+    subset(abs(LL - max(LL)) < 1.92) |>
+    summarise(upper = max(size), lower = min(size)) -> CI_size
+  
+  rbind(CIs_size, data.frame(
+    MLE = MLE_size$size, lower = CI_size$lower, upper = CI_size$upper, 
+    group = Combos$group[i], 
+    location = Combos$location_to_use[i],
+    what = "size"
+        )) -> CIs_size
+}
+
+CIs_size
+
+# for mu 
+
+CIs_mu <- NULL
+
+for (i in 1:nrow(Combos)){
+  
+  AllLogLiks |> 
+    subset(group == Combos$group[i] & location == Combos$location_to_use[i]) |>
+    subset(LL == max(LL)) -> MLE_mu
+  
+  AllLogLiks |> subset(group == Combos$group[i] & location == Combos$location_to_use[i]) |>
+    subset(size == MLE_mu$size) |>
+    subset(abs(LL - max(LL)) < 1.92) |>
+    summarise(upper = max(mu), lower = min(mu)) -> CI_mu
+  
+  rbind(CIs_mu, data.frame(
+    MLE = MLE_mu$mu, lower = CI_mu$lower, upper = CI_mu$upper, 
+    group = Combos$group[i], 
+    location = Combos$location_to_use[i],
+    what = "mu"
+        )) -> CIs_mu
+}
+
+CIs_both <- as.data.frame(rbind(CIs_size, CIs_mu))
+```
+
+```{r}
+#plot confidence intervals
+
+#for size and mu together 
+Confidence_Intervals_NegBinom <- CIs_both |> 
+  group_by(location,group, what) |>
+  ggplot(aes(x = as.factor(location), y = MLE, color = group, group = group)) + 
+  geom_point(size = 3) +
+  geom_line() + 
+  geom_errorbar(aes(ymin = lower, ymax = upper)) +
+  labs(title = "Confidence Intervals for Size and Mu", 
+       subtitle = "By Location and Functional Feeding Group",
+       x = "location", 
+       y = "value", 
+      colour = "Functional \nFeeding Group") +
+  scale_colour_manual(values = c("CG" = "#f58c84", "CF" = "#dcc790", "PR" = "#65cceb", "SC" = "#c1b1f5", "SH" = "#f3a1df")) +
+  facet_grid(what~group, scales = "free_y")
+
+#for size
+Confidence_Intervals_size <- CIs_both |> 
+  group_by(location,group, what) |>
+  subset(what == "size") |>
+  ggplot(aes(x = as.factor(location), y = MLE, color = group, group = group)) + 
+  geom_point(size = 3) +
+  geom_line() + 
+  geom_errorbar(aes(ymin = lower, ymax = upper)) +
+  labs(title = "Confidence Intervals for Size", 
+       subtitle = "By Location and Functional Feeding Group",
+       x = "location", 
+       y = "size value", 
+      colour = "Functional \nFeeding Group") +
+  scale_colour_manual(values = c("CG" = "#f58c84", "CF" = "#dcc790", "PR" = "#65cceb", "SC" = "#c1b1f5", "SH" = "#f3a1df")) +
+  facet_grid(~group, scales = "free_y")
+
+#for mu
+Confidence_Intervals_mu <- CIs_both |> 
+  group_by(location,group, what) |>
+  subset(what == "mu") |>
+  ggplot(aes(x = as.factor(location), y = MLE, color = group, group = group)) + 
+  geom_point(size = 3) +
+  geom_line() + 
+  geom_errorbar(aes(ymin = lower, ymax = upper)) +
+  labs(title = "Confidence Intervals for Mu", 
+       subtitle = "By Location and Functional Feeding Group",
+       x = "location", 
+       y = "mu value", 
+      colour = "Functional \nFeeding Group") +
+  scale_colour_manual(values = c("CG" = "#f58c84", "CF" = "#dcc790", "PR" = "#65cceb", "SC" = "#c1b1f5", "SH" = "#f3a1df")) +
+  facet_grid(~group, scales = "free_y")
+
+#for mu with small-abundance FFGs only
+Confidence_Intervals_mu_zoomed <- CIs_both |> 
+  group_by(location,group, what) |>
+  subset(what == "mu") |>
+  subset(group != "CG") |>
+  subset(group != "CF") |>
+  ggplot(aes(x = as.factor(location), y = MLE, color = group, group = group)) + 
+  geom_point(size = 3) +
+  geom_line() + 
+  geom_errorbar(aes(ymin = lower, ymax = upper)) +
+  labs(title = "Confidence Intervals for Mu", 
+       subtitle = "By Location and Functional Feeding Group",
+       x = "location", 
+       y = "mu value", 
+      colour = "Functional \nFeeding Group") +
+  scale_colour_manual(values = c("CG" = "#f58c84", "CF" = "#dcc790", "PR" = "#65cceb", "SC" = "#c1b1f5", "SH" = "#f3a1df")) +
+  facet_grid(~group, scales = "free_y")
+```
+

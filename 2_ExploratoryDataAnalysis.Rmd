@@ -1,0 +1,120 @@
+---
+title: "2_ExploratoryDataAnalysis"
+output: html_document
+date: "2024-12-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(tidyverse)
+```
+
+## Looking at Mean Proportion by FFG and Site
+```{r}
+#read in data, remove UN and PI 
+
+ffg_data <- read_csv("final_mean_proportion_by_ffg_and_site.csv")
+
+ffg_data<- ffg_data%>%
+  subset(ffg!="UN")%>%
+  subset(ffg!="PI")
+```
+
+```{r}
+#comparing three rivers side-by-side 
+
+#with all FFGs
+Prop_Along_River <- ffg_data%>%
+  group_by(ffg)%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=ffg))+
+  geom_line()+
+  facet_wrap(~river, scales = "free_x") +
+  labs(title = "Proportion of Functional Feeding Group by Site Along River Gradients", 
+       y = "mean proportion by site", 
+       x = "site", 
+       colour = "Functional \nFeeding Group") + 
+  scale_colour_manual(values = c("#f58c84", "#dcc790", "#65cceb", "#c1b1f5", "#f3a1df"))
+
+#with small abundance FFGs
+Prop_Along_River_Without <- ffg_data%>%
+  group_by(ffg)%>%
+  filter(ffg!="CF")%>%
+  filter(ffg!="CG")%>%
+  ggplot(aes(x=site, y=mean_proportion, colour=ffg))+
+  geom_line()+
+  facet_wrap(~river, scales = "free") + 
+  labs(title = "Proportion of Functional Feeding Group by Site Along River Gradients",
+       subtitle = "Without CF and CG",
+       y = "mean proportion by site", 
+       x = "site", 
+       colour = "Functional \nFeeding Group") + 
+  scale_colour_manual(values = c("#4dbd49", "#69d2ba", "#65cceb", "#c1b1f5", "#f3a1df"))
+```
+
+## Reaction Norms for Binned Rivers 
+```{r}
+#read in data 
+beginning_end <- read.csv("beginning_end.csv")
+```
+
+```{r}
+#with all FFGs
+RN_Faceted <- beginning_end |> 
+  group_by(river,location,distinct_ffg) |>
+  mutate(meanCount = mean(total_count)) |>
+  ggplot(aes(x = as.factor(location), y = meanCount, color = distinct_ffg, group = distinct_ffg)) + 
+  geom_point(size = 3) +
+  geom_line() +
+  facet_wrap(~river) + 
+  labs(title = "Change in Functional Feeding Group Abundance by River Location",
+       subtitle = "by river",
+       x = "location", 
+       y = "mean abundance") +
+  scale_colour_manual(values = c("#f58c84", "#dcc790", "#65cceb", "#c1b1f5", "#f3a1df"))
+ 
+RN <- beginning_end |> 
+  group_by(location,distinct_ffg) |>
+  mutate(meanCount = mean(total_count)) |>
+  ggplot(aes(x = as.factor(location), y = meanCount, color = distinct_ffg, group = distinct_ffg)) + 
+  geom_point(size = 3) +
+  geom_line() + 
+  labs(title = "Change in Functional Feeding Group Abundance by River Location",
+       x = "location", 
+       y = "mean abundance", 
+       colour = "Functional \nFeeding Group") +
+  scale_colour_manual(values = c("#f58c84", "#dcc790", "#65cceb", "#c1b1f5", "#f3a1df"))
+
+#with small-abundance FFGs only
+RN_Faceted_WO <- beginning_end |> 
+   subset(distinct_ffg != "CG") %>%
+  subset(distinct_ffg != "CF") %>%
+  group_by(river,location,distinct_ffg) |>
+  mutate(meanCount = mean(total_count)) |>
+  ggplot(aes(x = as.factor(location), y = meanCount, color = distinct_ffg, group = distinct_ffg)) + 
+  geom_point(size = 3) +
+  geom_line() +
+  facet_wrap(~river) + 
+  labs(title = "Change in Functional Feeding Group Abundance by River Location",
+       subtitle = "by river, without CF and CG", 
+       x = "location", 
+       y = "mean abundance") + 
+  scale_colour_manual(values = c("#65cceb", "#c1b1f5", "#f3a1df"))
+ 
+RN_WO <- beginning_end |> 
+  subset(distinct_ffg != "CG") %>%
+  subset(distinct_ffg != "CF") %>%
+  group_by(location,distinct_ffg) |>
+  mutate(meanCount = mean(total_count)) |>
+  ggplot(aes(x = as.factor(location), y = meanCount, color = distinct_ffg, group = distinct_ffg)) + 
+  geom_point(size = 3) +
+  geom_line() + 
+  labs(title = "Change in Functional Feeding Group Abundance by River Location",
+       subtitle = "Without CF and CG", 
+       x = "location", 
+       y = "mean abundance", 
+       colour = "Functional \nFeeding Group") + 
+  scale_colour_manual(values = c("#65cceb", "#c1b1f5", "#f3a1df"))
+```
+
+
